@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>硬币称重问题 — 信息论分析与可视化</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
+header{background:linear-gradient(135deg,#16213e,#0f3460);padding:20px;text-align:center;border-bottom:2px solid #e94560}
+header h1{font-size:26px;color:#e94560;margin-bottom:4px}
+header p{font-size:13px;color:#a0a0b0}
+.container{max-width:1340px;margin:0 auto;padding:16px;display:grid;grid-template-columns:300px 1fr;gap:16px}
+.card{background:#16213e;border-radius:10px;padding:16px;border:1px solid #1a3a5c}
+.card h3{font-size:14px;color:#e94560;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #1a3a5c}
+.form-group{margin-bottom:10px}
+.form-group label{display:block;font-size:12px;color:#a0a0b0;margin-bottom:3px}
+.form-group input[type=range]{width:100%;accent-color:#e94560}
+.form-group select{width:100%;padding:7px;background:#0f3460;color:#e0e0e0;border:1px solid #1a3a5c;border-radius:6px;font-size:13px}
+.range-row{display:flex;justify-content:space-between;font-size:12px;color:#a0a0b0}
+.btn-row{display:flex;gap:6px}
+.btn-row .btn{flex:1}
+.btn{width:100%;padding:9px 14px;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;margin-bottom:6px}
+.btn-primary{background:#e94560;color:#fff}
+.btn-primary:hover{background:#d63850}
+.btn-secondary{background:#0f3460;color:#e0e0e0;border:1px solid #1a3a5c}
+.btn-secondary:hover{background:#1a3a5c}
+.btn-success{background:#2d8a4e;color:#fff}
+.btn-success:hover{background:#257040}
+.btn-warn{background:#8a5d0a;color:#fff}
+.btn-warn:hover{background:#704a08}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.info-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-bottom:1px solid #1a3a5c}
+.info-row .label{color:#a0a0b0}
+.info-row .value{color:#e94560;font-weight:600}
+.info-formula{font-size:11px;color:#7890a0;margin-top:3px;font-family:Consolas,monospace}
+.panel-right{display:flex;flex-direction:column;gap:16px}
+.scale-container{display:flex;flex-direction:column;align-items:center;background:#16213e;border-radius:10px;padding:16px;border:1px solid #1a3a5c}
+.scale-beam-wrap{position:relative;width:440px;height:55px;margin:12px 0}
+.scale-pivot{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:3px;height:36px;background:#7890a0;border-radius:2px}
+.scale-beam{position:absolute;left:0;top:50%;transform:translateY(-50%) rotate(0deg);width:100%;height:5px;background:#e94560;border-radius:3px;transition:transform .7s cubic-bezier(.25,.46,.45,.94);transform-origin:center center}
+.scale-beam::before,.scale-beam::after{content:'';position:absolute;top:5px;width:2px;height:24px;background:#7890a0}
+.scale-beam::before{left:10px}
+.scale-beam::after{right:10px}
+.scale-pan{position:absolute;top:32px;width:96px;min-height:36px;background:#0f3460;border:2px solid #1a3a5c;border-radius:7px;padding:5px;transition:top .7s cubic-bezier(.25,.46,.45,.94);display:flex;flex-wrap:wrap;gap:3px;justify-content:center;font-size:10px}
+.scale-pan-left{left:2px}
+.scale-pan-right{right:2px}
+.pan-label{font-size:9px;color:#7890a0;text-align:center;width:100%}
+.coin-dot{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;transition:all .3s}
+.scale-outcome{font-size:17px;font-weight:700;margin-top:6px;padding:5px 18px;border-radius:18px;text-align:center}
+.coin-grid{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;padding:6px 0}
+.coin{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;cursor:default;transition:all .3s;border:2px solid transparent}
+.coin-unknown{background:#2a3a5c;border-color:#3a5a8c;color:#c0c0d0}
+.coin-possibly-heavy{background:#4a2a0a;border-color:#e9a040;color:#e9a040}
+.coin-possibly-light{background:#0a2a4a;border-color:#40a0e9;color:#40a0e9}
+.coin-genuine{background:#1a3a2a;border-color:#40a060;color:#40a060}
+.coin-fake{background:#5c1a2a;border-color:#e94560;color:#e94560;animation:pulse .7s ease-in-out infinite}
+.coin-on-left{box-shadow:0 0 10px rgba(233,160,64,.6)}
+.coin-on-right{box-shadow:0 0 10px rgba(64,160,233,.6)}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
+.step-list{max-height:180px;overflow-y:auto}
+.step-item{padding:7px 10px;margin:3px 0;border-radius:5px;background:#0f3460;font-size:12px}
+.step-item .step-num{color:#e94560;font-weight:700;margin-right:6px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;margin-top:6px}
+.legend-item{display:flex;align-items:center;gap:3px}
+.legend-dot{width:13px;height:13px;border-radius:50%;border:2px solid}
+.tree-container{max-height:400px;overflow:auto;font-family:Consolas,'Courier New',monospace;font-size:12px;line-height:1.6}
+.tree-node{margin-left:16px;border-left:1px solid #1a3a5c;padding-left:10px;margin-top:3px}
+.tree-weighing{color:#e94560;font-weight:600}
+.tree-outcome{color:#e9a040;margin:2px 0}
+.tree-result{color:#40e960;font-weight:600}
+.suggest{color:#e9a040;font-size:14px;text-align:center;padding:8px;margin-top:6px;background:#0f3460;border-radius:8px}
+@media(max-width:900px){.container{grid-template-columns:1fr}.scale-beam-wrap{width:320px}.scale-pan{width:66px}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>硬币称重问题 — 信息论分析与可视化</h1>
+  <p>无砝码天平称重 · 鉴别假币 · 信息论下界与最优策略</p>
+</header>
+
+<div class="container">
+<div class="panel-left">
+
+  <div class="card">
+    <h3>参数设置</h3>
+    <div class="form-group">
+      <label>硬币总数 n</label>
+      <input type="range" id="nRange" min="3" max="81" value="12" step="1">
+      <div class="range-row"><span>3</span><span id="nValue">12</span><span>81</span></div>
+    </div>
+    <div class="form-group">
+      <label>假币重量关系</label>
+      <select id="modeSelect">
+        <option value="unknown">未知（不知假币是轻还是重）</option>
+        <option value="known">已知（已知假币更重）</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>预设示例</label>
+      <select id="presetSelect">
+        <option value="">-- 选择预设 --</option>
+        <option value="12-unknown">n=12, 未知（经典问题, 3次）</option>
+        <option value="12-known">n=12, 已知假币更重（3次）</option>
+        <option value="39-unknown">n=39, 未知（4次）</option>
+        <option value="39-known">n=39, 已知假币更重（4次）</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" id="btnStart">重新开始 (R)</button>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="btnStep">执行称重 ▸</button>
+      <button class="btn btn-success" id="btnAuto">自动完成 ⏩</button>
+    </div>
+    <button class="btn btn-warn" id="btnReveal">揭晓答案</button>
+  </div>
+
+  <div class="card">
+    <h3>信息论分析</h3>
+    <div class="info-row"><span class="label">硬币数 n</span><span class="value" id="infoN">12</span></div>
+    <div class="info-row"><span class="label">可能状态数</span><span class="value" id="infoStates">24</span></div>
+    <div class="info-row"><span class="label">所需信息量</span><span class="value" id="infoBits">4.58 bit</span></div>
+    <div class="info-row"><span class="label">每次称重信息</span><span class="value">log₂3 ≈ 1.58 bit</span></div>
+    <div class="info-row"><span class="label">信息论下界</span><span class="value" id="infoLowerBound">3 次</span></div>
+    <div class="info-row"><span class="label">理论上限(该次数)</span><span class="value" id="infoMax">12 枚</span></div>
+    <div class="info-formula" id="infoFormula">⌈log₃(2n)⌉ = ⌈log₃(24)⌉ = 3</div>
+  </div>
+
+  <div class="card">
+    <h3>当前状态</h3>
+    <div id="statusText" style="font-size:12px;color:#a0a0b0;">点击"重新开始"初始化</div>
+  </div>
+
+  <div class="card">
+    <h3>图例</h3>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot coin-unknown"></div> 状态未知</div>
+      <div class="legend-item"><div class="legend-dot coin-possibly-heavy"></div> 可能偏重</div>
+      <div class="legend-item"><div class="legend-dot coin-possibly-light"></div> 可能偏轻</div>
+      <div class="legend-item"><div class="legend-dot coin-genuine"></div> 确认真币</div>
+      <div class="legend-item"><div class="legend-dot coin-fake"></div> 假币</div>
+    </div>
+    <div style="font-size:11px;color:#7890a0;margin-top:8px;">空格/→ 执行称重 | R 重置 | A 自动完成</div>
+  </div>
+</div>
+
+<div class="panel-right">
+  <div class="card">
+    <h3>天平称重</h3>
+    <div class="scale-container">
+      <div class="scale-beam-wrap">
+        <div class="scale-beam" id="beam"></div>
+        <div class="scale-pivot"></div>
+        <div class="scale-pan scale-pan-left" id="panLeft"><span class="pan-label">左盘</span></div>
+        <div class="scale-pan scale-pan-right" id="panRight"><span class="pan-label">右盘</span></div>
+      </div>
+      <div class="suggest" id="suggestText">点击"重新开始"初始化</div>
+      <div class="scale-outcome" id="outcomeText" style="background:#0f3460;">等待称重...</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>硬币状态</h3>
+    <div class="coin-grid" id="coinGrid"></div>
+  </div>
+
+  <div class="card">
+    <h3>称重记录</h3>
+    <div class="step-list" id="stepList"><div style="color:#7890a0;font-size:12px;">暂无记录</div></div>
+  </div>
+
+  <div class="card" id="treeCard" style="display:none;">
+    <h3>完整策略与信息论分析</h3>
+    <div class="tree-container" id="treeContainer"></div>
+  </div>
+</div>
+</div>
+
+<script>
+// ==================== SOLVER ENGINE ====================
+class CoinSimulation {
+  constructor(n, knownRelation) {
+    this.n = n;
+    this.knownRelation = knownRelation;
+    this.coinStates = new Array(n).fill('unknown');
+    this.fakeCoin = null;
+    this.fakeIsHeavy = null;
+    this.genuineWeight = 10;
+    this.steps = [];
+    this.currentWeighing = null;
+    this.finished = false;
+    this.suggestedWeighing = null;
+  }
+
+  init() {
+    this.fakeCoin = Math.floor(Math.random() * this.n);
+    this.fakeIsHeavy = this.knownRelation ? true : (Math.random() < 0.5);
+    this.coinStates = new Array(this.n).fill('unknown');
+    this.steps = [];
+    this.currentWeighing = null;
+    this.finished = false;
+    this.suggestedWeighing = this.computeOptimalWeighing();
+  }
+
+  getPossibleCount() {
+    let cnt = 0;
+    for (let i = 0; i < this.n; i++) {
+      if (this.coinStates[i] === 'unknown') cnt += 2;
+      else if (this.coinStates[i] === 'possibly_heavy' || this.coinStates[i] === 'possibly_light') cnt += 1;
+    }
+    return cnt;
+  }
+
+  getGenuineCoins() {
+    let result = [];
+    for (let i = 0; i < this.n; i++)
+      if (this.coinStates[i] === 'genuine') result.push(i);
+    return result;
+  }
+
+  getSuspicious() {
+    let heavy = [], light = [], unknown = [];
+    for (let i = 0; i < this.n; i++) {
+      if (this.coinStates[i] === 'unknown') unknown.push(i);
+      else if (this.coinStates[i] === 'possibly_heavy') heavy.push(i);
+      else if (this.coinStates[i] === 'possibly_light') light.push(i);
+    }
+    return { heavy, light, unknown };
+  }
+
+  computeOptimalWeighing() {
+    if (this.finished) return null;
+    return this.knownRelation ? this.computeWeighingKnown() : this.computeWeighingUnknown();
+  }
+
+  // ---- KNOWN CASE (fake is heavier) ----
+  computeWeighingKnown() {
+    let suspects = [];
+    for (let i = 0; i < this.n; i++)
+      if (this.coinStates[i] !== 'genuine' && this.coinStates[i] !== 'fake')
+        suspects.push(i);
+
+    if (suspects.length <= 1) return null;
+    if (suspects.length === 2)
+      return { left: [suspects[0]], right: [suspects[1]] };
+
+    let k = Math.ceil(suspects.length / 3);
+    let left = suspects.slice(0, k);
+    let right = suspects.slice(k, Math.min(2 * k, suspects.length));
+    // Pad with genuine
+    let genuine = this.getGenuineCoins();
+    while (left.length < right.length && genuine.length > 0) {
+      let g = genuine.find(x => !left.includes(x) && !right.includes(x));
+      if (g === undefined) break;
+      left.push(g);
+    }
+    while (right.length < left.length && genuine.length > 0) {
+      let g = genuine.find(x => !left.includes(x) && !right.includes(x));
+      if (g === undefined) break;
+      right.push(g);
+    }
+    return { left, right };
+  }
+
+  // ---- UNKNOWN CASE ----
+  computeWeighingUnknown() {
+    let { heavy, light, unknown } = this.getSuspicious();
+    let genuine = this.getGenuineCoins();
+    let H = heavy.length, L = light.length, U = unknown.length, G = genuine.length;
+    let total = H + L + U;
+    if (total === 0) return null;
+    if (total === 1) {
+      let coin = heavy[0] || light[0] || unknown[0];
+      if (G > 0) return { left: [coin], right: [genuine[0]] };
+      return null;
+    }
+
+    // Case A: Only unknown, no genuine → first-weighing split
+    if (H === 0 && L === 0 && G === 0) {
+      let k = Math.floor(this.n / 3);
+      return { left: unknown.slice(0, k), right: unknown.slice(k, 2 * k) };
+    }
+
+    // Case B: Only unknown, have genuine → compare 2/3 of unknown vs genuine
+    if (H === 0 && L === 0 && G > 0) {
+      let k = Math.min(Math.ceil(2 * U / 3), G);
+      if (k === 0) k = Math.min(1, U);
+      if (k > U) k = U;
+      return { left: unknown.slice(0, k), right: genuine.slice(0, k) };
+    }
+
+    // Case C: Only one type of directional suspect (all heavy or all light)
+    // Split into 3 groups — same strategy as "known" case
+    if (H > 0 && L === 0 && U === 0) {
+      if (H === 1) return null; // found it
+      let k = Math.ceil(H / 3);
+      let left = heavy.slice(0, k);
+      let right = heavy.slice(k, Math.min(2 * k, H));
+      // Pad shorter side with genuine coins
+      while (left.length < right.length && genuine.length > 0) {
+        let g = genuine.find(x => !left.includes(x) && !right.includes(x));
+        if (g === undefined) break;
+        left.push(g);
+      }
+      while (right.length < left.length && genuine.length > 0) {
+        let g = genuine.find(x => !left.includes(x) && !right.includes(x));
+        if (g === undefined) break;
+        right.push(g);
+      }
+      return { left, right };
+    }
+    if (L > 0 && H === 0 && U === 0) {
+      if (L === 1) return null; // found it
+      let k = Math.ceil(L / 3);
+      let left = light.slice(0, k);
+      let right = light.slice(k, Math.min(2 * k, L));
+      while (left.length < right.length && genuine.length > 0) {
+        let g = genuine.find(x => !left.includes(x) && !right.includes(x));
+        if (g === undefined) break;
+        left.push(g);
+      }
+      while (right.length < left.length && genuine.length > 0) {
+        let g = genuine.find(x => !left.includes(x) && !right.includes(x));
+        if (g === undefined) break;
+        right.push(g);
+      }
+      return { left, right };
+    }
+
+    // Case D: Mixed directional suspects (H>0, L>0), no unknown
+    if (H > 0 && L > 0 && U === 0) {
+      return this.computeMixedOptimal(heavy, light, [], genuine);
+    }
+
+    // Case E: Mixed everything — search for optimal
+    return this.computeMixedOptimal(heavy, light, unknown, genuine);
+  }
+
+  // Search-based optimal weighing for mixed heavy/light/unknown suspects
+  computeMixedOptimal(heavy, light, unknown, genuine) {
+    let H = heavy.length, L = light.length, U = unknown.length, G = genuine.length;
+
+    // Performance guard: if search space too large, use heuristic
+    let hCombs = (H + 1) * (H + 2) / 2;
+    let lCombs = (L + 1) * (L + 2) / 2;
+    let uCombs = (U + 1) * (U + 2) / 2;
+    if (hCombs * lCombs * uCombs > 50000) {
+      return this.computeMixedHeuristic(heavy, light, unknown, genuine);
+    }
+
+    let hParts = this.genPartitions(H);
+    let lParts = this.genPartitions(L);
+    let uParts = this.genPartitions(U);
+
+    let best = null, bestMax = Infinity;
+
+    for (let [Hl, Hr] of hParts) {
+      let Ho = H - Hl - Hr;
+      for (let [Ll, Lr] of lParts) {
+        let Lo = L - Ll - Lr;
+        for (let [Ul, Ur] of uParts) {
+          let Uo = U - Ul - Ur;
+
+          let lt = Ll + Hr + Ul + Ur + 2 * Uo + Ho + Lo;
+          let eq = Ho + Lo + 2 * Uo;
+          let gt = Hl + Lr + Ul + Ur + 2 * Uo + Ho + Lo;
+          let worst = Math.max(lt, eq, gt);
+
+          let leftSz = Hl + Ll + Ul;
+          let rightSz = Hr + Lr + Ur;
+          if (Math.abs(leftSz - rightSz) > G) continue;
+          if (leftSz === 0 && rightSz === 0) continue;
+          if (worst === 0) continue;
+
+          if (worst < bestMax) {
+            bestMax = worst;
+            best = { heavy, light, unknown, genuine, Hl, Hr, Ll, Lr, Ul, Ur };
+          }
+        }
+      }
+    }
+
+    if (!best) {
+      // Fallback: test largest group against genuine
+      if (G > 0) {
+        if (H >= L && H >= U && H > 0) return { left: [heavy[0]], right: [genuine[0]] };
+        if (L >= H && L >= U && L > 0) return { left: [light[0]], right: [genuine[0]] };
+        if (U > 0) return { left: [unknown[0]], right: [genuine[0]] };
+      }
+      if (H >= 2) return { left: [heavy[0]], right: [heavy[1]] };
+      if (L >= 2) return { left: [light[0]], right: [light[1]] };
+      if (H === 1 && L === 1) return { left: [heavy[0]], right: [light[0]] };
+      return null;
+    }
+
+    // Build the actual left/right arrays
+    let left = [], right = [];
+    left.push(...heavy.slice(0, best.Hl));
+    left.push(...light.slice(0, best.Ll));
+    left.push(...unknown.slice(0, best.Ul));
+    right.push(...heavy.slice(best.Hl, best.Hl + best.Hr));
+    right.push(...light.slice(best.Ll, best.Ll + best.Lr));
+    right.push(...unknown.slice(best.Ul, best.Ul + best.Ur));
+
+    // Balance with genuine coins
+    while (left.length < right.length && genuine.length > 0) {
+      let g = genuine.find(x => !left.includes(x) && !right.includes(x));
+      if (g === undefined) break;
+      left.push(g);
+    }
+    while (right.length < left.length && genuine.length > 0) {
+      let g = genuine.find(x => !left.includes(x) && !right.includes(x));
+      if (g === undefined) break;
+      right.push(g);
+    }
+
+    if (left.length === 0 || right.length === 0) return null;
+    return { left, right };
+  }
+
+  computeMixedHeuristic(heavy, light, unknown, genuine) {
+    // Simpler heuristic for large cases
+    let H = heavy.length, L = light.length, U = unknown.length, G = genuine.length;
+    let left = [], right = [];
+
+    // Split heavy: 1/3 left, 1/3 right, 1/3 off
+    let kh = Math.ceil(H / 3);
+    left.push(...heavy.slice(0, kh));
+    right.push(...heavy.slice(kh, Math.min(2 * kh, H)));
+
+    // Split light: 1/3 on right, 1/3 on left (swapped to get info)
+    let kl = Math.ceil(L / 3);
+    right.push(...light.slice(0, kl));
+    left.push(...light.slice(kl, Math.min(2 * kl, L)));
+
+    // Split unknown
+    let ku = Math.ceil(U / 3);
+    left.push(...unknown.slice(0, ku));
+    right.push(...unknown.slice(ku, Math.min(2 * ku, U)));
+
+    // Balance with genuine
+    while (left.length < right.length && genuine.length > 0) {
+      let g = genuine.find(x => !left.includes(x) && !right.includes(x));
+      if (g === undefined) break;
+      left.push(g);
+    }
+    while (right.length < left.length && genuine.length > 0) {
+      let g = genuine.find(x => !left.includes(x) && !right.includes(x));
+      if (g === undefined) break;
+      right.push(g);
+    }
+
+    if (left.length === 0 || right.length === 0) return null;
+    return { left, right };
+  }
+
+  genPartitions(n) {
+    // Generate (x, y) where x on left, y on right, n-x-y off
+    // Limit: only generate meaningful partitions
+    if (n === 0) return [[0, 0]];
+    let results = [[0, 0]];
+    for (let x = 0; x <= n; x++) {
+      for (let y = 0; y <= n - x; y++) {
+        if (x === 0 && y === 0) continue;
+        results.push([x, y]);
+      }
+    }
+    return results;
+  }
+
+  performWeighing(left, right) {
+    let l = [...left], r = [...right];
+    let genuine = this.getGenuineCoins();
+
+    // Pad to equal sizes
+    while (l.length < r.length) {
+      let g = genuine.find(x => !l.includes(x) && !r.includes(x));
+      if (g === undefined) break;
+      l.push(g);
+    }
+    while (r.length < l.length) {
+      let g = genuine.find(x => !l.includes(x) && !r.includes(x));
+      if (g === undefined) break;
+      r.push(g);
+    }
+
+    if (l.length !== r.length || l.length === 0) return null;
+
+    let lw = 0, rw = 0;
+    for (let c of l) lw += this.coinWeight(c);
+    for (let c of r) rw += this.coinWeight(c);
+
+    let outcome = lw > rw ? '>' : (lw < rw ? '<' : '=');
+    this.updateStates(l, r, outcome);
+
+    this.steps.push({ left: l, right: r, outcome });
+    this.currentWeighing = { left: l, right: r, outcome };
+
+    this.checkCompletion();
+    this.suggestedWeighing = this.computeOptimalWeighing();
+    return outcome;
+  }
+
+  coinWeight(c) {
+    if (c === this.fakeCoin)
+      return this.fakeIsHeavy ? this.genuineWeight + 1 : this.genuineWeight - 1;
+    return this.genuineWeight;
+  }
+
+  updateStates(left, right, outcome) {
+    let ls = new Set(left), rs = new Set(right);
+    if (outcome === '=') {
+      for (let c of left) this.setGenuine(c);
+      for (let c of right) this.setGenuine(c);
+    } else {
+      let lType = outcome === '>' ? 'heavy' : 'light';
+      let rType = outcome === '>' ? 'light' : 'heavy';
+      for (let c of left) this.narrow(c, lType);
+      for (let c of right) this.narrow(c, rType);
+      for (let i = 0; i < this.n; i++)
+        if (!ls.has(i) && !rs.has(i)) this.setGenuine(i);
+    }
+  }
+
+  setGenuine(c) {
+    if (this.coinStates[c] !== 'fake') this.coinStates[c] = 'genuine';
+  }
+
+  narrow(c, type) {
+    if (this.coinStates[c] === 'fake') return;
+    let st = this.coinStates[c];
+    if (st === 'unknown') {
+      this.coinStates[c] = type === 'heavy' ? 'possibly_heavy' : 'possibly_light';
+    } else if ((st === 'possibly_heavy' && type === 'light') ||
+               (st === 'possibly_light' && type === 'heavy')) {
+      this.coinStates[c] = 'genuine';
+    }
+  }
+
+  checkCompletion() {
+    let { heavy, light, unknown } = this.getSuspicious();
+    if (heavy.length === 1 && light.length === 0 && unknown.length === 0) {
+      this.fakeCoin = heavy[0]; this.fakeIsHeavy = true; this.reveal();
+    } else if (light.length === 1 && heavy.length === 0 && unknown.length === 0) {
+      this.fakeCoin = light[0]; this.fakeIsHeavy = false; this.reveal();
+    }
+  }
+
+  reveal() {
+    this.coinStates[this.fakeCoin] = 'fake';
+    this.finished = true;
+    this.suggestedWeighing = null;
+  }
+}
+
+// ==================== UI ====================
+const $ = id => document.getElementById(id);
+let sim = null;
+
+function renderCoinGrid() {
+  if (!sim) { $('coinGrid').innerHTML = ''; return; }
+  let ls = new Set(sim.currentWeighing ? sim.currentWeighing.left : []);
+  let rs = new Set(sim.currentWeighing ? sim.currentWeighing.right : []);
+  let sls = new Set(sim.suggestedWeighing ? sim.suggestedWeighing.left : []);
+  let srs = new Set(sim.suggestedWeighing ? sim.suggestedWeighing.right : []);
+
+  let html = '';
+  for (let i = 0; i < sim.n; i++) {
+    let cls = 'coin coin-' + sim.coinStates[i];
+    let extra = '';
+    if (ls.has(i)) extra = ' coin-on-left';
+    else if (rs.has(i)) extra = ' coin-on-right';
+    else if (sim.currentWeighing === null && sls.has(i)) extra = ' coin-on-left';
+    else if (sim.currentWeighing === null && srs.has(i)) extra = ' coin-on-right';
+    html += `<div class="${cls}${extra}" title="硬币${i+1}: ${sim.coinStates[i]}">${i+1}</div>`;
+  }
+  $('coinGrid').innerHTML = html;
+}
+
+function renderScale() {
+  if (!sim || !sim.currentWeighing) {
+    $('beam').style.transform = 'translateY(-50%) rotate(0deg)';
+    $('panLeft').innerHTML = '<span class="pan-label">左盘</span>';
+    $('panRight').innerHTML = '<span class="pan-label">右盘</span>';
+    $('outcomeText').textContent = '等待称重...';
+    $('outcomeText').style.background = '#0f3460';
+    return;
+  }
+  let { left, right, outcome } = sim.currentWeighing;
+  let cc = idx => {
+    let m = {unknown:'#4a5a7c',possibly_heavy:'#e9a040',possibly_light:'#40a0e9',genuine:'#40a060',fake:'#e94560'};
+    return m[sim.coinStates[idx]] || '#4a5a7c';
+  };
+  $('panLeft').innerHTML = left.length ? left.map(c => `<div class="coin-dot" style="background:${cc(c)}">${c+1}</div>`).join('') : '<span class="pan-label">左盘（空）</span>';
+  $('panRight').innerHTML = right.length ? right.map(c => `<div class="coin-dot" style="background:${cc(c)}">${c+1}</div>`).join('') : '<span class="pan-label">右盘（空）</span>';
+
+  let angle = outcome === '<' ? -7 : (outcome === '>' ? 7 : 0);
+  $('beam').style.transform = `translateY(-50%) rotate(${angle}deg)`;
+
+  let texts = { '=': '⚖ 平衡', '<': '↓ 左轻右重', '>': '↑ 左重右轻' };
+  let colors = { '=': '#0f3460', '<': '#1a3a5c', '>': '#5c3a1a' };
+  $('outcomeText').textContent = texts[outcome];
+  $('outcomeText').style.background = colors[outcome];
+}
+
+function renderSuggest() {
+  if (!sim || sim.finished) {
+    $('suggestText').textContent = sim && sim.finished ? '已找到假币！' : '';
+    return;
+  }
+  if (!sim.suggestedWeighing) {
+    let { heavy, light, unknown } = sim.getSuspicious();
+    if (heavy.length + light.length + unknown.length === 1) {
+      $('suggestText').textContent = '只剩1枚可疑硬币，用真币对比确定轻重';
+    } else {
+      $('suggestText').textContent = '（无法确定下一步）';
+    }
+    return;
+  }
+  let l = sim.suggestedWeighing.left.map(c => c + 1).join(',');
+  let r = sim.suggestedWeighing.right.map(c => c + 1).join(',');
+  $('suggestText').innerHTML = `建议: 左 [<b>${l || '空'}</b>] vs 右 [<b>${r || '空'}</b>]`;
+}
+
+function renderSteps() {
+  if (!sim || sim.steps.length === 0) {
+    $('stepList').innerHTML = '<div style="color:#7890a0;font-size:12px;">暂无记录</div>';
+    return;
+  }
+  $('stepList').innerHTML = sim.steps.map((s, i) => {
+    let ls = s.left.map(c => c + 1).join(',');
+    let rs = s.right.map(c => c + 1).join(',');
+    let os = s.outcome === '=' ? '平衡' : (s.outcome === '<' ? '左轻右重' : '左重右轻');
+    return `<div class="step-item"><span class="step-num">#${i+1}</span> [${ls}] vs [${rs}] → <b>${os}</b></div>`;
+  }).join('');
+}
+
+function renderStatus() {
+  if (!sim) { $('statusText').textContent = '点击"重新开始"初始化'; return; }
+  if (sim.finished) {
+    let t = sim.fakeIsHeavy ? '偏重' : '偏轻';
+    let opt = sim.knownRelation ? Math.ceil(Math.log(sim.n) / Math.log(3)) : Math.ceil(Math.log(2 * sim.n) / Math.log(3));
+    $('statusText').innerHTML = `✅ 假币: <b style="color:#e94560;">硬币 ${sim.fakeCoin+1}</b>（${t}）<br>称重次数: <b style="color:#e94560;">${sim.steps.length}</b> | 信息论下界: <b>${opt}</b> 次`;
+    $('btnStep').disabled = true;
+    $('btnAuto').disabled = true;
+  } else {
+    let p = sim.getPossibleCount();
+    let s = sim.getSuspicious();
+    let t = s.heavy.length + s.light.length + s.unknown.length;
+    $('statusText').innerHTML = `剩余可能: <b style="color:#e94560;">${p}</b> 种<br>可疑: <b>${t}</b> 枚 | 真币: <b>${sim.getGenuineCoins().length}</b> 枚`;
+    $('btnStep').disabled = false;
+    $('btnAuto').disabled = false;
+  }
+}
+
+function renderAll() {
+  renderCoinGrid();
+  renderScale();
+  renderSuggest();
+  renderSteps();
+  renderStatus();
+}
+
+function updateInfoPanel() {
+  let n = parseInt($('nRange').value);
+  let known = $('modeSelect').value === 'known';
+  let states = known ? n : 2 * n;
+  let w = Math.ceil(Math.log(states) / Math.log(3));
+  let maxN = known ? Math.pow(3, w) : Math.floor((Math.pow(3, w) - 3) / 2);
+
+  $('infoN').textContent = n;
+  $('infoStates').textContent = states;
+  $('infoBits').textContent = Math.log2(states).toFixed(2) + ' bit';
+  $('infoLowerBound').textContent = w + ' 次';
+  $('infoMax').textContent = maxN + ' 枚';
+  $('infoFormula').textContent = known
+    ? `⌈log₃(n)⌉ = ⌈log₃(${n})⌉ = ${w}`
+    : `⌈log₃(2n)⌉ = ⌈log₃(${2*n})⌉ = ${w}`;
+}
+
+// ==================== STRATEGY TREE ====================
+function showStrategyTree() {
+  $('treeCard').style.display = 'block';
+  let n = parseInt($('nRange').value);
+  let known = $('modeSelect').value === 'known';
+  let states = known ? n : 2 * n;
+  let w = Math.ceil(Math.log(states) / Math.log(3));
+  let maxN = known ? Math.pow(3, w) : Math.floor((Math.pow(3, w) - 3) / 2);
+
+  let html = `<div style="color:#a0a0b0;margin-bottom:10px;">`;
+  html += `<b>问题:</b> ${n}枚硬币，1枚假币，${known ? '已知假币更重' : '不知假币轻重'}，用无砝码天平找出假币`;
+
+  html += `<br><br><b style="color:#e94560;">信息论分析:</b>`;
+  html += `<br>• 可能状态: ${states} 种（${known ? `${n}枚中任1枚为假` : `${n}枚×2(轻重)=${2*n}种`}）`;
+  html += `<br>• 所需信息量: log₂(${states}) ≈ <b>${Math.log2(states).toFixed(2)} bit</b>`;
+  html += `<br>• 天平每次称重有3种结果 → 每次提供 log₂3 ≈ <b>1.58 bit</b> 信息`;
+  html += `<br>• 信息论下界: ⌈log₃(${states})⌉ = <b style="color:#40e960;">${w} 次</b>`;
+  html += `<br>• 理论上限: ${w}次称重最多处理 <b>${maxN}</b> 枚硬币（${known ? '已知' : '未知'}轻重）`;
+  if (n <= maxN) html += ` → n=${n} ≤ ${maxN}，<b style="color:#40e960;">理论上可行 ✓</b>`;
+  html += `</div>`;
+
+  html += `<div style="color:#e9a040;font-weight:600;margin-top:8px;">具体称重策略:</div>`;
+
+  if (known) {
+    html += showKnownStrategy(n, w);
+  } else if (n === 12) {
+    html += showStrategy12();
+  } else if (n === 39) {
+    html += showStrategy39();
+  } else {
+    html += showGeneralUnknown(n, w);
+  }
+  $('treeContainer').innerHTML = html;
+}
+
+function showKnownStrategy(n, w) {
+  return `<div class="tree-node">
+<div>已知假币更重，采用<b>三分法</b>：每次将可疑硬币均分为3组。</div>
+<div>• 左右盘各放 ⌈k/3⌉ 枚，剩余暂不称重</div>
+<div>• 哪边重假币就在哪边；平衡则在剩余组</div>
+<div>• 方案: <b style="color:#40e960;">${w} 次称重</b></div>
+<div style="margin-top:6px;color:#7890a0;">
+公式: 最少次数 = ⌈log₃(n)⌉ = ⌈log₃(${n})⌉ = ${w}<br>
+${w}次可处理最多 3^${w} = ${Math.pow(3,w)} 枚硬币
+</div></div>`;
+}
+
+function showStrategy12() {
+  return `<div class="tree-node">
+<div class="tree-weighing">第1次: {1,2,3,4} vs {5,6,7,8}</div>
+<div class="tree-outcome">├ 平衡 → 假币∈{9,10,11,12} (8种可能, 剩2次)</div>
+<div class="tree-node">
+  <div class="tree-weighing">第2次: {9,10,11} vs {<span style="color:#40a060">1,2,3</span>} ←真币</div>
+  <div class="tree-outcome">├ 平衡 → 假币=12。第3次: {12} vs {1} → 轻或重</div>
+  <div class="tree-outcome">├ 左重 → {9,10,11}偏重。第3次: {9} vs {10}</div>
+  <div class="tree-outcome">└ 左轻 → {9,10,11}偏轻。第3次: {9} vs {10}</div>
+</div>
+<div class="tree-outcome">├ 左重 → {1,2,3,4}重 或 {5,6,7,8}轻 (8种可能, 剩2次)</div>
+<div class="tree-node">
+  <div class="tree-weighing">第2次: {1,2,5} vs {3,4,6}</div>
+  <div class="tree-outcome">├ 平衡 → {7,8}轻。第3次: {7} vs {8}</div>
+  <div class="tree-outcome">├ 左重 → {1,2}重 或 6轻。第3次: {1} vs {2}</div>
+  <div class="tree-outcome">└ 左轻 → {3,4}重 或 5轻。第3次: {3} vs {4}</div>
+</div>
+<div class="tree-outcome">└ 左轻 → 对称（交换左右盘角色）</div>
+<div class="tree-result" style="margin-top:6px;">✅ 3次称重必定找出假币，达信息论下界 ⌈log₃(24)⌉=3<br>
+3次可处理上限: (3³-3)/2 = 12 枚（未知轻重）</div></div>`;
+}
+
+function showStrategy39() {
+  return `<div class="tree-node">
+<div class="tree-weighing">第1次: {1..13} vs {14..26}（各13枚）</div>
+<div class="tree-outcome">├ 平衡 → 假币∈{27..39} (13枚, 26种可能, 剩3次)</div>
+<div class="tree-node">
+  <div>13枚可疑 + 26枚已确认真币。用真币作参考拆分：</div>
+  <div class="tree-weighing">第2次: {27..31} vs {<span style="color:#40a060">1..5</span>} ← 5枚真币</div>
+  <div>├ 平衡 → 假币∈{32..39}(8枚, 剩2次) — 类似n=8问题</div>
+  <div>├ 左重 → {27..31}偏重(5种, 剩2次) — 三分法解决</div>
+  <div>└ 左轻 → {27..31}偏轻(5种, 剩2次) — 三分法解决</div>
+</div>
+<div class="tree-outcome">├ 左重 → 左13枚可能重 或 右13枚可能轻 (26种, 剩3次)</div>
+<div class="tree-node">
+  <div>26枚分方向(13重+13轻) + 13枚真币。需拆分26≤27：</div>
+  <div class="tree-weighing">第2次: (4重+5轻) vs (4重+5轻)，各9枚</div>
+  <div>→ 结果: 9, 9, 8 三种分支，均 ≤ 3²=9 ✓</div>
+  <div>→ 后续: 三分法在每个分支各需≤2次</div>
+</div>
+<div class="tree-outcome">└ 左轻 → 对称（左13枚可能轻，右13枚可能重）</div>
+<div class="tree-result" style="margin-top:6px;">✅ 4次称重必定找出假币，达信息论下界 ⌈log₃(78)⌉=4<br>
+理论最大值: (3⁴-3)/2 = 39 枚（未知轻重）</div></div>`;
+}
+
+function showGeneralUnknown(n, w) {
+  let maxN = Math.floor((Math.pow(3, w) - 3) / 2);
+  return `<div class="tree-node">
+<div>一般策略（信息论方法）：</div>
+<div>• W1: 左右各放 ⌊n/3⌋ 枚 → 最坏情况剩 2⌊n/3⌋ 种可能</div>
+<div>• W2+: 利用已确认的真币作参考，搜索最优拆分</div>
+<div>• 保证每步剩余可能数 ≤ 3^(剩余次数)</div>
+<div>• ${w}次可处理上限: <b>${maxN}</b> 枚（未知轻重）</div>
+</div>`;
+}
+
+// ==================== EVENT HANDLERS ====================
+function startSimulation() {
+  let n = parseInt($('nRange').value);
+  let known = $('modeSelect').value === 'known';
+  sim = new CoinSimulation(n, known);
+  sim.init();
+  renderAll();
+  updateInfoPanel();
+  showStrategyTree();
+}
+
+function stepWeighing() {
+  if (!sim || sim.finished) return;
+  if (!sim.suggestedWeighing) {
+    let s = sim.getSuspicious();
+    // One unknown left — need one more weighing with genuine coin
+    if (s.unknown.length === 1 && s.heavy.length === 0 && s.light.length === 0) {
+      let g = sim.getGenuineCoins();
+      if (g.length > 0) {
+        sim.fakeCoin = s.unknown[0];
+        sim.suggestedWeighing = { left: [s.unknown[0]], right: [g[0]] };
+      }
+    }
+    if (!sim.suggestedWeighing) return;
+  }
+  sim.performWeighing(sim.suggestedWeighing.left, sim.suggestedWeighing.right);
+  renderAll();
+}
+
+function autoSolve() {
+  if (!sim || sim.finished) return;
+  let safety = 20;
+  while (!sim.finished && safety-- > 0) {
+    if (!sim.suggestedWeighing) {
+      let s = sim.getSuspicious();
+      if (s.unknown.length === 1 && s.heavy.length === 0 && s.light.length === 0) {
+        let g = sim.getGenuineCoins();
+        if (g.length > 0) {
+          sim.performWeighing([s.unknown[0]], [g[0]]);
+        } else {
+          sim.fakeCoin = s.unknown[0];
+          sim.fakeIsHeavy = true;
+          sim.reveal();
+        }
+      } else break;
+    } else {
+      sim.performWeighing(sim.suggestedWeighing.left, sim.suggestedWeighing.right);
+    }
+  }
+  renderAll();
+}
+
+function revealAnswer() {
+  if (!sim || sim.finished) return;
+  // Force reveal
+  sim.reveal();
+  renderAll();
+}
+
+$('nRange').addEventListener('input', function() {
+  $('nValue').textContent = this.value;
+  updateInfoPanel();
+});
+$('modeSelect').addEventListener('change', updateInfoPanel);
+$('presetSelect').addEventListener('change', function() {
+  let v = this.value; if (!v) return;
+  let [n, mode] = v.split('-');
+  $('nRange').value = n; $('nValue').textContent = n;
+  $('modeSelect').value = mode === 'unknown' ? 'unknown' : 'known';
+  updateInfoPanel(); startSimulation(); this.value = '';
+});
+$('btnStart').addEventListener('click', startSimulation);
+$('btnStep').addEventListener('click', stepWeighing);
+$('btnAuto').addEventListener('click', autoSolve);
+$('btnReveal').addEventListener('click', revealAnswer);
+
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepWeighing(); }
+  else if (e.key === 'r' || e.key === 'R') { startSimulation(); }
+  else if (e.key === 'a' || e.key === 'A') { autoSolve(); }
+});
+
+// ==================== INIT ====================
+updateInfoPanel();
+$('nValue').textContent = $('nRange').value;
+startSimulation();
+</script>
+</body>
+</html>
